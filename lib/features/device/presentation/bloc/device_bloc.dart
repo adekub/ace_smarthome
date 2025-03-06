@@ -231,24 +231,28 @@ class DeviceBloc extends Bloc<DeviceEvent, DeviceState> {
   }
 
   // ส่วนที่ปรับปรุงในไฟล์ lib/features/device/presentation/bloc/device_bloc.dart
-
   FutureOr<void> _onSetSchedule(
     SetScheduleEvent event,
     Emitter<DeviceState> emit,
   ) async {
     if (state is! DeviceLoaded) return;
 
+    // บันทึก currentState ก่อนเปลี่ยน state
+    final currentState = state as DeviceLoaded;
+
+    // จากนั้นค่อยเปลี่ยน state
     emit(DeviceOperationInProgress());
 
-    final currentState = state as DeviceLoaded;
+    // Optimistic update ทำทันที ไม่ต้องรอ API
+    final optimisticSchedules = Map<int, Schedule>.from(currentState.devices
+        .firstWhere((d) => d.id == event.deviceId)
+        .schedules);
+    optimisticSchedules[event.switchIndex] = event.schedule;
+
     final device = currentState.devices.firstWhere(
       (d) => d.id == event.deviceId,
       orElse: () => throw Exception('Device not found'),
     );
-
-    // Optimistic update ทำทันที ไม่ต้องรอ API
-    final optimisticSchedules = Map<int, Schedule>.from(device.schedules);
-    optimisticSchedules[event.switchIndex] = event.schedule;
 
     final optimisticDevice = device.copyWith(
       schedules: optimisticSchedules,

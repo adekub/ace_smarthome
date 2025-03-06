@@ -285,10 +285,17 @@ class DeviceRepositoryImpl implements DeviceRepository {
     try {
       if (await networkInfo.isConnected) {
         try {
+          final scheduleModel = ScheduleModel(
+            onTime: schedule.onTime,
+            offTime: schedule.offTime,
+            isEnabled: schedule.isEnabled,
+            isDaily: schedule.isDaily,
+          );
+
           final success = await remoteDataSource.setSchedule(
             device.deviceID,
             switchIndex,
-            schedule as ScheduleModel,
+            scheduleModel,
           );
 
           if (success) {

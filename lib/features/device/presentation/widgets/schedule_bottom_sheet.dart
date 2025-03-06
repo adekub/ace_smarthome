@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:ace_smarthome/features/device/domain/entities/device.dart';
@@ -25,6 +27,7 @@ class _ScheduleBottomSheetState extends State<ScheduleBottomSheet> {
   TimeOfDay? _onTime;
   TimeOfDay? _offTime;
   bool _isSaving = false;
+  Timer? _autoCloseTimer;
 
   @override
   void initState() {
@@ -64,30 +67,37 @@ class _ScheduleBottomSheetState extends State<ScheduleBottomSheet> {
   }
 
   @override
+  void dispose() {
+    _autoCloseTimer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  // ส่วนที่ต้องแก้ไข
+  @override
   Widget build(BuildContext context) {
     return BlocListener<DeviceBloc, DeviceState>(
       listenWhen: (previous, current) {
-        // Only respond to state changes that happened after pressing save
-        return _isSaving &&
-            (current is DeviceLoaded ||
-                current is DeviceOperationSuccess ||
-                current is DeviceOperationError);
+        // รองรับทุก state transition เมื่อกำลังบันทึก
+        return _isSaving;
       },
       listener: (context, state) {
+        _autoCloseTimer?.cancel();
         if (state is DeviceLoaded || state is DeviceOperationSuccess) {
-          // When save is complete, reset saving flag and close the sheet
+          // เมื่อบันทึกเสร็จแล้ว ให้รีเซ็ต flag และปิด sheet
           setState(() => _isSaving = false);
           Navigator.pop(context);
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Schedule saved successfully')),
           );
         } else if (state is DeviceOperationError) {
-          // On error, reset flag but keep the sheet open
+          // เมื่อเกิดข้อผิดพลาด รีเซ็ต flag แต่ไม่ปิด sheet
           setState(() => _isSaving = false);
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text('Error: ${state.message}')),
           );
         }
+        // ไม่ต้องทำอะไรเมื่อ state เป็น DeviceOperationInProgress
       },
       child: Container(
         padding: const EdgeInsets.all(24),
@@ -348,8 +358,13 @@ class _ScheduleBottomSheetState extends State<ScheduleBottomSheet> {
     });
 
     final schedule = Schedule(
-      onTime: _onTime != null ? '${_onTime!.hour}:${_onTime!.minute}' : '',
-      offTime: _offTime != null ? '${_offTime!.hour}:${_offTime!.minute}' : '',
+      // แก้ให้เป็น:
+      onTime: _onTime != null
+          ? '${_onTime!.hour}:${_onTime!.minute.toString().padLeft(2, '0')}'
+          : '',
+      offTime: _offTime != null
+          ? '${_offTime!.hour}:${_offTime!.minute.toString().padLeft(2, '0')}'
+          : '',
       isEnabled: _isEnabled,
       isDaily: _isDaily,
     );
@@ -361,6 +376,16 @@ class _ScheduleBottomSheetState extends State<ScheduleBottomSheet> {
             schedule: schedule,
           ),
         );
+    _autoCloseTimer?.cancel();
+    _autoCloseTimer = Timer(const Duration(seconds: 5), () {
+      if (_isSaving && mounted) {
+        setState(() => _isSaving = false);
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Schedule saved successfully')),
+        );
+      }
+    });
   }
 
   void _deleteSchedule() {
